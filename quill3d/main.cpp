@@ -179,6 +179,26 @@ void write_energy(ofstream& fout_energy)
             for (int n=0;n<n_ion_populations;n++)
                 fout_energy<<'\t'<<ienergy[n];
             fout_energy<<endl;
+
+        auto filename = data_folder + "/" + std::string("TimeSeries.h5");
+        auto file = H5::H5File(filename, H5F_ACC_RDWR);
+        
+        H5::DataSet *dataset = new H5::DataSet(file.openDataSet("Energy"));
+        H5::DataSpace *space = new H5::DataSpace(dataset->getSpace());
+        
+        hsize_t size[1];
+        space->getSimpleExtentDims(size, NULL);
+
+        hsize_t new_size[1] = {size[1] + 1};
+        dataset->extend(new_size);
+
+        hsize_t ext[1] = {1};
+        space->selectHyperslab(H5S_SELECT_SET, ext, size);
+
+        H5::DataSpace *memspace = new H5::DataSpace(1, ext);
+
+        // double write[1] = energy_e;
+        dataset->write({energy_e}, H5::PredType::NATIVE_DOUBLE, *memspace, *space);
     }
 }
 
@@ -2075,6 +2095,17 @@ void load_balancing() {
     }
 }
 
+void initialize_timeseries() {
+    auto filename = data_folder + "/" + std::string("TimeSeries.h5");
+    auto file = H5::H5File(filename, H5F_ACC_RDWR);
+
+    const hsize_t dims[1] {0};
+    const hsize_t maxdims[1] = {H5S_UNLIMITED};
+    H5::DataSpace dataspace(1, dims, maxdims);
+    H5::DataSet e_dataset = file.createDataSet("Energy", H5::PredType::NATIVE_DOUBLE, dataspace);
+    H5::DataSet n_dataset = file.createDataSet("N", H5::PredType::NATIVE_DOUBLE, dataspace);
+}
+
 int main(int argc, char * argv[])
 {
     MPI_Init(&argc, &argv);
@@ -2187,6 +2218,7 @@ int main(int argc, char * argv[])
 
     l=0;
 
+    initialize_timeseries();
     ofstream fout_N;
     ofstream fout_energy;
     ofstream fout_energy_deleted;
