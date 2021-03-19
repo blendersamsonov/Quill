@@ -186,7 +186,7 @@ void append_to_timeseries(const std::string & dataset_name, double data)
     space.getSimpleExtentDims(size, NULL);
 
     extend_dataset(&dataset, 0);
-    
+
     std::vector<double> write = {data};
     write_1d_array(&data, 1, dataset, size);
 }
@@ -226,6 +226,12 @@ void write_energy(ofstream& fout_energy)
         append_to_timeseries("Energy/positrons", energy_p);
         append_to_timeseries("Energy/photons", energy_ph);
         append_to_timeseries("Energy/em", energy_f);
+
+        for (int n = 0; n < n_ion_populations; n++) {
+            char s_cmr[100];
+            sprintf(s_cmr, "%g", icmr[n]);
+            append_to_timeseries("Energy/ions_" + std::string(s_cmr), ienergy[n]);
+        }
     }
 }
 
@@ -403,6 +409,12 @@ void write_energy_deleted(ofstream& fout_energy_deleted)
         append_to_timeseries("Deleted/electrons", energy_e_deleted);
         append_to_timeseries("Deleted/positrons", energy_p_deleted);
         append_to_timeseries("Deleted/photons", energy_ph_deleted);
+
+        for (int n = 0; n < n_ion_populations; n++) {
+            char s_cmr[100];
+            sprintf(s_cmr, "%g", icmr[n]);
+            append_to_timeseries("Deleted/ions_" + std::string(s_cmr), ienergy_deleted[n]);
+        }
     }
 }
 
@@ -2159,7 +2171,6 @@ void load_balancing() {
 
 void initialize_timeseries() {
     const H5std_string FILE_NAME(data_folder + "/TimeSeries.h5");
-    // auto filename = data_folder + "/" + std::string("TimeSeries.h5");
     H5::H5File file = H5::H5File(FILE_NAME, H5F_ACC_TRUNC);
 
     hsize_t dims[1] = {0};
@@ -2167,13 +2178,8 @@ void initialize_timeseries() {
     hsize_t chunk_dims[1] = {1};
     const H5std_string E_DATASET_NAME("Energy");
 
-    // Create the data space for the dataset.  Note the use of pointer
-    // for the instance 'dataspace'.  It can be deleted and used again
-    // later for another dataspace.  An HDF5 identifier can be closed
-    // by the destructor or the method 'close()'.
-    H5::DataSpace *dataspace = new H5::DataSpace(1, dims, maxdims);
+        H5::DataSpace *dataspace = new H5::DataSpace(1, dims, maxdims);
 
-    // Modify dataset creation property to enable chunking
     H5::DSetCreatPropList prop;
     prop.setChunk(1, chunk_dims);
 
@@ -2189,6 +2195,14 @@ void initialize_timeseries() {
     deleted_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
     deleted_group.createDataSet("positrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
     deleted_group.createDataSet("photons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+
+    for (int n = 0; n < n_ion_populations; n++) {
+        char s_cmr[100];
+        sprintf(s_cmr, "%g", icmr[n]);
+        std::string name = std::string("ions_") + std::string(s_cmr);
+        energy_group.createDataSet(name, H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+        deleted_group.createDataSet(name, H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    }
 
     H5::Group n_group = file.createGroup("N");
     n_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
