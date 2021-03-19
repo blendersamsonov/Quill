@@ -155,7 +155,7 @@ void write_mwcoordinate(ofstream & fout_mwcoordinate) {
     }
 }
 
-void extend_dataset(H5::DataSet *dataset, const int axis)
+void extend_dataset(H5::DataSet * dataset, const int axis)
 {
     H5::DataSpace *space = new H5::DataSpace(dataset->getSpace());
     const int rank = space->getSimpleExtentNdims();
@@ -165,28 +165,30 @@ void extend_dataset(H5::DataSet *dataset, const int axis)
     dataset->extend(size);
 }
 
-void write_to_dataset(H5::DataSet *dataset, const std::vector<double> & data, const hsize_t offset[])
+void write_1d_array(double * p_first_element, int vector_size, H5::DataSet & dataset, const hsize_t offset[])
 {
-    hsize_t data_size[] = {data.size()};
-    H5::DataSpace *newspace = new H5::DataSpace(dataset->getSpace());
-    H5::DataSpace *memspace = new H5::DataSpace(1, data_size);
+    hsize_t dims[1] = {static_cast<hsize_t>(vector_size)};
+    auto write_dataspace = dataset.getSpace();
+    H5::DataSpace memory_dataspace(1, dims);
     
-    newspace->selectHyperslab(H5S_SELECT_SET, data_size, offset);
-    dataset->write(&(data[0]), H5::PredType::NATIVE_DOUBLE, *memspace, *newspace);
+    write_dataspace.selectHyperslab(H5S_SELECT_SET, dims, offset);
+    dataset.write(p_first_element, H5::PredType::NATIVE_DOUBLE, memory_dataspace, write_dataspace);
 }
 
-void append_to_timeseries(const std::string & dataset_name, float data)
+void append_to_timeseries(const std::string & dataset_name, double data)
 { 
     H5::H5File file = H5::H5File(data_folder + "/TimeSeries.h5", H5F_ACC_RDWR);
     
-    H5::DataSet *dataset = new H5::DataSet(file.openDataSet(dataset_name));
-    H5::DataSpace *space = new H5::DataSpace(dataset->getSpace());
+    auto dataset = file.openDataSet(dataset_name);
+    auto space = dataset.getSpace();
     
     hsize_t size[1];
-    space->getSimpleExtentDims(size, NULL);
+    space.getSimpleExtentDims(size, NULL);
 
-    extend_dataset(dataset, 0);
-    write_to_dataset(dataset, std::vector<double>{data}, size);
+    extend_dataset(&dataset, 0);
+    
+    std::vector<double> write = {data};
+    write_1d_array(&data, 1, dataset, size);
 }
 
 void write_N(ofstream& fout_N)
