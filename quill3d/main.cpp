@@ -155,6 +155,40 @@ void write_mwcoordinate(ofstream & fout_mwcoordinate) {
     }
 }
 
+void extend_dataset(H5::DataSet *dataset, const int axis)
+{
+    H5::DataSpace *space = new H5::DataSpace(dataset->getSpace());
+    const int rank = space->getSimpleExtentNdims();
+    hsize_t size[rank];
+    space->getSimpleExtentDims(size, NULL);
+    size[axis] += 1;
+    dataset->extend(size);
+}
+
+void write_to_dataset(H5::DataSet *dataset, const std::vector<double> & data, const hsize_t offset[])
+{
+    hsize_t data_size[] = {data.size()};
+    H5::DataSpace *newspace = new H5::DataSpace(dataset->getSpace());
+    H5::DataSpace *memspace = new H5::DataSpace(1, data_size);
+    
+    newspace->selectHyperslab(H5S_SELECT_SET, data_size, offset);
+    dataset->write(&(data[0]), H5::PredType::NATIVE_DOUBLE, *memspace, *newspace);
+}
+
+void append_to_timeseries(const std::string & dataset_name, float data)
+{ 
+    H5::H5File file = H5::H5File(data_folder + "/TimeSeries.h5", H5F_ACC_RDWR);
+    
+    H5::DataSet *dataset = new H5::DataSet(file.openDataSet(dataset_name));
+    H5::DataSpace *space = new H5::DataSpace(dataset->getSpace());
+    
+    hsize_t size[1];
+    space->getSimpleExtentDims(size, NULL);
+
+    extend_dataset(dataset, 0);
+    write_to_dataset(dataset, std::vector<double>{data}, size);
+}
+
 void write_N(ofstream& fout_N)
 {
     double N_e,N_p,N_ph;
@@ -163,6 +197,10 @@ void write_N(ofstream& fout_N)
     MPI_Reduce(&(psr->N_ph), &N_ph, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     if (mpi_rank == 0) {
         fout_N<<N_e<<'\t'<<N_p<<'\t'<<N_ph<<endl;
+
+        append_to_timeseries("N/positrons", N_p);
+        append_to_timeseries("N/electrons", N_e);
+        append_to_timeseries("N/photons", N_ph);
     }
 }
 
@@ -181,26 +219,11 @@ void write_energy(ofstream& fout_energy)
             for (int n=0;n<n_ion_populations;n++)
                 fout_energy<<'\t'<<ienergy[n];
             fout_energy<<endl;
-
-        auto filename = data_folder + "/" + std::string("TimeSeries.h5");
-        auto file = H5::H5File(filename, H5F_ACC_RDWR);
         
-        H5::DataSet *dataset = new H5::DataSet(file.openDataSet("Energy"));
-        H5::DataSpace *space = new H5::DataSpace(dataset->getSpace());
-        
-        hsize_t size[1];
-        space->getSimpleExtentDims(size, NULL);
-
-        hsize_t new_size[1] = {size[1] + 1};
-        dataset->extend(new_size);
-
-        hsize_t ext[1] = {1};
-        space->selectHyperslab(H5S_SELECT_SET, ext, size);
-
-        H5::DataSpace *memspace = new H5::DataSpace(1, ext);
-
-        // double write[1] = energy_e;
-        dataset->write({energy_e}, H5::PredType::NATIVE_DOUBLE, *memspace, *space);
+        append_to_timeseries("Energy/electrons", energy_e);
+        append_to_timeseries("Energy/positrons", energy_p);
+        append_to_timeseries("Energy/photons", energy_ph);
+        append_to_timeseries("Energy/em", energy_f);
     }
 }
 
@@ -374,6 +397,10 @@ void write_energy_deleted(ofstream& fout_energy_deleted)
         for (int n=0; n<n_ion_populations; n++)
             fout_energy_deleted << '\t' << ienergy_deleted[n];
         fout_energy_deleted << endl;
+
+        append_to_timeseries("Deleted/electrons", energy_e_deleted);
+        append_to_timeseries("Deleted/positrons", energy_p_deleted);
+        append_to_timeseries("Deleted/photons", energy_ph_deleted);
     }
 }
 
@@ -2129,14 +2156,42 @@ void load_balancing() {
 }
 
 void initialize_timeseries() {
-    auto filename = data_folder + "/" + std::string("TimeSeries.h5");
-    auto file = H5::H5File(filename, H5F_ACC_RDWR);
+    const H5std_string FILE_NAME(data_folder + "/TimeSeries.h5");
+    // auto filename = data_folder + "/" + std::string("TimeSeries.h5");
+    H5::H5File file = H5::H5File(FILE_NAME, H5F_ACC_TRUNC);
 
-    const hsize_t dims[1] {0};
-    const hsize_t maxdims[1] = {H5S_UNLIMITED};
-    H5::DataSpace dataspace(1, dims, maxdims);
-    H5::DataSet e_dataset = file.createDataSet("Energy", H5::PredType::NATIVE_DOUBLE, dataspace);
-    H5::DataSet n_dataset = file.createDataSet("N", H5::PredType::NATIVE_DOUBLE, dataspace);
+    hsize_t dims[1] = {0};
+    hsize_t maxdims[1] = {H5S_UNLIMITED};
+    hsize_t chunk_dims[1] = {1};
+    const H5std_string E_DATASET_NAME("Energy");
+
+    // Create the data space for the dataset.  Note the use of pointer
+    // for the instance 'dataspace'.  It can be deleted and used again
+    // later for another dataspace.  An HDF5 identifier can be closed
+    // by the destructor or the method 'close()'.
+    H5::DataSpace *dataspace = new H5::DataSpace(1, dims, maxdims);
+
+    // Modify dataset creation property to enable chunking
+    H5::DSetCreatPropList prop;
+    prop.setChunk(1, chunk_dims);
+
+    file.createDataSet("t", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+
+    H5::Group energy_group = file.createGroup("Energy");
+    energy_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    energy_group.createDataSet("positrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    energy_group.createDataSet("photons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    energy_group.createDataSet("em", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+
+    H5::Group deleted_group = file.createGroup("Deleted");
+    deleted_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    deleted_group.createDataSet("positrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    deleted_group.createDataSet("photons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+
+    H5::Group n_group = file.createGroup("N");
+    n_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    n_group.createDataSet("positrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    n_group.createDataSet("photons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
 }
 
 int main(int argc, char * argv[])
@@ -2251,12 +2306,12 @@ int main(int argc, char * argv[])
 
     l=0;
 
-    initialize_timeseries();
     ofstream fout_N;
     ofstream fout_energy;
     ofstream fout_energy_deleted;
     ofstream fout_mwcoordinate;
     if (mpi_rank == 0) {
+        initialize_timeseries();
         fout_N.open(data_folder+"/N");
         fout_energy.open(data_folder+"/energy");
 
@@ -2325,7 +2380,6 @@ int main(int argc, char * argv[])
             start_tracking();
         }
 
-
         write_N(fout_N);
         write_energy(fout_energy);
         if (mwindow != moving_window::OFF) {
@@ -2337,6 +2391,7 @@ int main(int argc, char * argv[])
         }
 
         if (mpi_rank == 0) {
+            append_to_timeseries("t", l*dt);
             cout<<"\033[33m"<<"ct/lambda = "<<l*dt/2/PI<<"\tstep# "<<l<<TERM_NO_COLOR;
         }
 
