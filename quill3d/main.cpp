@@ -155,40 +155,141 @@ void write_mwcoordinate(ofstream & fout_mwcoordinate) {
     }
 }
 
-void extend_dataset(H5::DataSet * dataset, const int axis)
+void extend_dataset(H5::DataSet * dataset, const int axis, const int amount = 1)
 {
     H5::DataSpace *space = new H5::DataSpace(dataset->getSpace());
     const int rank = space->getSimpleExtentNdims();
     hsize_t size[rank];
     space->getSimpleExtentDims(size, NULL);
-    size[axis] += 1;
+    size[axis] += amount;
     dataset->extend(size);
 }
 
-void write_1d_array(double * p_first_element, int vector_size, H5::DataSet & dataset, const hsize_t offset[])
+void write_1d_array(double * p_first_element, int vector_size, H5::DataSet * dataset, const hsize_t offset[])
 {
     hsize_t dims[1] = {static_cast<hsize_t>(vector_size)};
-    auto write_dataspace = dataset.getSpace();
+    auto write_dataspace = dataset->getSpace();
     H5::DataSpace memory_dataspace(1, dims);
     
     write_dataspace.selectHyperslab(H5S_SELECT_SET, dims, offset);
-    dataset.write(p_first_element, H5::PredType::NATIVE_DOUBLE, memory_dataspace, write_dataspace);
+    dataset->write(p_first_element, H5::PredType::NATIVE_DOUBLE, memory_dataspace, write_dataspace);
 }
 
-void append_to_timeseries(const std::string & dataset_name, double data)
+void append_to_1d_array(H5::DataSet * dataset, double data)
 { 
-    H5::H5File file = H5::H5File(data_folder + "/TimeSeries.h5", H5F_ACC_RDWR);
-    
-    auto dataset = file.openDataSet(dataset_name);
-    auto space = dataset.getSpace();
+    // cout<<"\033[33m"<<"Openning dataset: "<<dataset_name<<TERM_NO_COLOR<<endl;
+    // auto dataset = file->openDataSet(dataset_name);
+    auto space = dataset->getSpace();
+    return;
     
     hsize_t size[1];
     space.getSimpleExtentDims(size, NULL);
 
-    extend_dataset(&dataset, 0);
+    // if (size[0] < 100000) {
+    //     extend_dataset(dataset, 0);
 
-    std::vector<double> write = {data};
-    write_1d_array(&data, 1, dataset, size);
+    //     std::vector<double> write = {data};
+    //     // write_1d_array(&data, 1, &dataset, size);
+    // }
+}
+
+void append_to_timeseries(const std::string & dataset_name, double data)
+{ 
+    H5::H5File file = H5::H5File(data_folder + std::string("/TimeSeries.h5"), H5F_ACC_RDWR);
+    auto dataset = file.openDataSet(dataset_name);
+    append_to_1d_array(&dataset, data);
+}
+
+void append_particle(H5::DataSet *datasets[][8], int *amounts, particle * p, int x0) {
+    const cstd::string space[8] = {"charge", "position/x", "position/y", "position/z", "momentum/x", "momentum/y", "momentum/z", "chi"};
+    H5::DataSet **dataset;
+    int amount;
+    if (p->cmr==-1) {
+        dataset = datasets[0];
+        amount = amounts[0];
+        amounts[0] += 1;
+    } else if (p->cmr==1) {
+        dataset = datasets[1];
+        amount = amounts[1];
+        amounts[1] += 1;
+    } else if (p->cmr==0) {
+        dataset = datasets[2];
+        amount = amounts[2];
+        amounts[2] += 1;
+    } else {
+        int m = 0;
+        while (m!=n_ion_populations)
+        {
+            if (p->cmr==icmr[m])
+            {
+                dataset = datasets[3+m];
+                amount = amounts[3+m];
+                amounts[3+m] += 1;
+                m = n_ion_populations;
+            }
+            else
+                m++;
+        }
+    }
+
+    // if (!(amount % batch)) {
+    // }
+    // extend_dataset(dataset, 0, 1);
+    // std::vector<double> write = {p->q};
+    hsize_t size[1] = {amount+1};
+    
+    hsize_t offset[1] = {amount};
+    hsize_t maxdims[1] = {H5S_UNLIMITED};    
+    hsize_t mdims[1] = {1};
+
+    // auto write_dataspace = dataset->getSpace();
+    H5::DataSpace write_dataspace(1, size, maxdims);
+    H5::DataSpace memory_dataspace(1, mdims);
+    
+    write_dataspace.selectHyperslab(H5S_SELECT_SET, mdims, offset);
+    
+    for (int i = 0; i < 8; i++) {
+        dataset[i]->extend(size);
+        double write[1];
+        switch (i) {
+        case 0:
+            write[0] = p->q;
+            break;
+        case 1:
+            write[0] = p->x;
+            break;
+        case 2:
+            write[0] = p->y;
+            break;
+        case 3:
+            write[0] = p->z;
+            break;
+        case 4:
+            write[0] = p->ux;
+            break;
+        case 5:
+            write[0] = p->uy;
+            break;
+        case 6:
+            write[0] = p->uz;
+            break;
+        case 7:
+            write[0] = p->chi;
+            break;
+        }
+        dataset[i]->write(write, H5::PredType::NATIVE_DOUBLE, memory_dataspace, write_dataspace);
+    }
+    
+    // cout<<"\033[33m"<<"Openning dataset: "<<dataset->getObjName()<<TERM_NO_COLOR<<endl;
+    // append_to_1d_array(dataset, p->q);
+    // append_to_1d_array(file, group + "/x",   p->x+x0/(2*PI));
+    // append_to_1d_array(file, group + "/y",   p->y/(2*PI));
+    // append_to_1d_array(file, group + "/z",   p->z/(2*PI));
+    // append_to_1d_array(file, group + "/ux",  p->ux);
+    // append_to_1d_array(file, group + "/uy",  p->uy);
+    // append_to_1d_array(file, group + "/uz",  p->uz);
+    // append_to_1d_array(file, group + "/g" ,  p->g);
+    // append_to_1d_array(file, group + "/chi", p->chi);
 }
 
 void write_N(ofstream& fout_N)
@@ -434,6 +535,15 @@ std::string calculate_filename_suffix(const ddi & a) {
     return std::string(str_buffer);
 }
 
+void initialize_particles_datasets(const std::string & particles_filename, const std::string & particle_name) {
+    auto data_prefix = openpmd::iteration_particles_group_string(l) + "/";
+    const std::string space[8] = {"charge", "position/x", "position/y", "position/z", "momentum/x", "momentum/y", "momentum/z", "chi"};
+
+    for (const std::string &s : space) {
+        openpmd::initialize_1d_extendable_dataset(particles_filename, data_prefix + particle_name + "/" + s, 10000);
+    }
+}
+
 void initialize_2d_datasets(const string & fields_xy_filename, const string & fields_xz_filename, const string & fields_yz_filename, const string & dataset_name) {
     auto data_prefix = openpmd::iteration_meshes_group_string(l) + "/";
     
@@ -580,7 +690,7 @@ void write_rho_ion() {
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void write_spectrum_phasespace(bool write_p, bool write_ph)
+void write_spectrum_phasespace_old(bool write_p, bool write_ph)
 {
     ios_base::openmode non_binary_mode;
     if (mpi_rank == 0) {
@@ -839,20 +949,89 @@ void write_spectrum_phasespace(bool write_p, bool write_ph)
     delete[] spectrum_i;
 }
 
+void write_spectrum_phasespace(bool write_p, bool write_ph)
+{
+    auto filename_suffix = calculate_filename_suffix(*p_current_ddi);
+    auto filename = data_folder + "/" + std::string("Particles") + filename_suffix + ".h5";
+    auto data_prefix = openpmd::iteration_particles_group_string(l) + "/";
+    std::string names[3 + n_ion_populations] = {"electrons", "positrons", "photons"};
+    const std::string space[8] = {"charge", "position/x", "position/y", "position/z", "momentum/x", "momentum/y", "momentum/z", "chi"};
+    
+    for (int n = 0; n < n_ion_populations; n++) {
+        char s_cmr[100];
+        sprintf(s_cmr, "%g", icmr[n - 3]);
+        names[3 + n] = "ions_" + std::string(s_cmr);
+    }
+    
+    if (mpi_rank == 0) 
+    {
+        for(const std::string &name : names) {
+            initialize_particles_datasets(filename, name);
+        }
+    }
+
+    // sequential output of phasespace
+    // return;
+    particle* current;
+    for(int n=0;n<n_sr;n++)
+    {
+        if (mpi_rank == n) {
+            // cout<<"\033[33m"<<"Opening particles file: "<<filename<<TERM_NO_COLOR<<endl;
+            H5::H5File file = H5::H5File(filename, H5F_ACC_RDWR);
+        
+            H5::DataSet datasets[3 + n_ion_populations][8];
+            H5::DataSet * datasets_ptr[3 + n_ion_populations][8];
+            int amounts[3 + n_ion_populations] = {0};
+
+
+            for (int n = 0; n < 3 + n_ion_populations; n++) {
+                for (int m = 0; m < 8; m++) {
+                    datasets[n][m] = openpmd::open_dataset(file, data_prefix + names[n] + "/" + space[m]);
+                    datasets_ptr[n][m] = &datasets[n][m];
+                }
+                hsize_t size[1];
+                datasets[n][0].getSpace().getSimpleExtentDims(size, NULL);
+                amounts[n] = size[0];
+            }
+
+            for(int i=nm*(n!=0);i<nx_sr[n]-nm*(n!=n_sr-1);i++)
+            {
+                for(int j=0;j<ny_global;j++)
+                {
+                    for(int k=0;k<nz_global;k++)
+                    {
+                        current = psr->cp[i][j][k].pl.head;
+                        while(current!=0)
+                        {
+                            append_particle(datasets_ptr, amounts, current, x0_sr[n]);
+                            current = current->next;
+                        }
+                    }
+                }
+            }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+}
+
 void initialize_output_files() { 
     auto filename_suffix = calculate_filename_suffix(*p_current_ddi);
     auto fields_xy_filename = data_folder + "/" + std::string("Fields_xy_") + filename_suffix + ".h5";
     auto fields_xz_filename = data_folder + "/" + std::string("Fields_xz_") + filename_suffix + ".h5";
     auto fields_yz_filename = data_folder + "/" + std::string("Fields_yz_") + filename_suffix + ".h5";
 
+    auto particles_filename = data_folder + "/" + std::string("Particles") + filename_suffix + ".h5";
+
     if (mpi_rank == 0) {
         openpmd::initialize_file(fields_xy_filename);
         openpmd::initialize_file(fields_xz_filename);
         openpmd::initialize_file(fields_yz_filename);
+        openpmd::initialize_file(particles_filename);
 
         openpmd::create_iteration_group(fields_xy_filename, l, dt, calculate_output_time(*p_current_ddi), 0.0);
         openpmd::create_iteration_group(fields_xz_filename, l, dt, calculate_output_time(*p_current_ddi), 0.0);
         openpmd::create_iteration_group(fields_yz_filename, l, dt, calculate_output_time(*p_current_ddi), 0.0);
+        openpmd::create_iteration_group(particles_filename, l, dt, calculate_output_time(*p_current_ddi), 0.0);
     }
 }
 
@@ -2171,7 +2350,8 @@ void load_balancing() {
 
 void initialize_timeseries() {
     const H5std_string FILE_NAME(data_folder + "/TimeSeries.h5");
-    H5::H5File file = H5::H5File(FILE_NAME, H5F_ACC_TRUNC);
+    openpmd::initialize_file(FILE_NAME);
+    H5::H5File file = H5::H5File(FILE_NAME, H5F_ACC_RDWR);
 
     hsize_t dims[1] = {0};
     hsize_t maxdims[1] = {H5S_UNLIMITED};

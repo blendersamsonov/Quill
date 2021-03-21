@@ -4,6 +4,7 @@
 #include <cstring>
 
 const std::string MESHES_GROUP = "meshes";
+const std::string PARTICLES_GROUP = "particles";
 
 std::string get_parent(const std::string & path) {
     auto last_separator = path.find_last_of('/');
@@ -40,11 +41,16 @@ H5::Group open_group(const H5::Group & base_group, const std::string & group_nam
     }
 }
 
-H5::DataSet create_dataset(const H5::Group & base_group, const std::string & name, const H5::DataSpace & dataspace) {
+H5::DataSet create_dataset(const H5::Group & base_group, const std::string & name, const H5::DataSpace & dataspace, int chunks = 0) {
     auto last_separator = name.find_last_of('/');
 
     if (last_separator == std::string::npos) {
-        return base_group.createDataSet(name, H5::PredType::NATIVE_DOUBLE, dataspace);
+        H5::DSetCreatPropList prop;
+        if (chunks > 0) {
+            hsize_t chunk_dims[1] = {chunks};
+            prop.setChunk(1, chunk_dims);
+        }
+        return base_group.createDataSet(name, H5::PredType::NATIVE_DOUBLE, dataspace, prop);
     } else {
         auto new_base_group = open_group(base_group, name.substr(0, last_separator));
         auto new_name = name.substr(last_separator+1);
@@ -155,6 +161,10 @@ std::string openpmd::iteration_meshes_group_string(int iteration) {
     return iteration_group_string(iteration) + "/" + MESHES_GROUP;
 }
 
+std::string openpmd::iteration_particles_group_string(int iteration) {
+    return iteration_group_string(iteration) + "/" + PARTICLES_GROUP;
+}
+
 void openpmd::initialize_file(const std::string & filepath) {
     auto file = H5::H5File(filepath, H5F_ACC_TRUNC);
 
@@ -188,6 +198,25 @@ void initialize_mesh_attrs(H5::H5Object & obj, openpmd::Space space, const std::
     create_attribute(obj, "unitDimension", std::vector<double>(7, 0.0));
     create_attribute(obj, "timeOffset", 0.0);
     create_attribute(obj, "axisLabels", get_axes_labels(space));
+}
+
+void openpmd::initialize_1d_extendable_dataset(const std::string & filepath, const std::string & name, int chunk_size) {
+    H5::H5File file = H5::H5File(filepath, H5F_ACC_RDWR);
+
+    hsize_t dims[1] = {0};
+    hsize_t maxdims[1] = {H5S_UNLIMITED};
+    H5::DataSpace dataspace(1, dims, maxdims);
+
+    auto group_name = get_parent(name);
+    auto group = open_group(file, group_name);
+
+    auto dataset_name = get_name(name);
+    H5::DataSet dataset = create_dataset(group, dataset_name, dataspace, chunk_size);
+
+    // TODO proper SI units
+    create_attribute(dataset, "unitSI", 1.0);
+    // TODO proper position of the grid
+    create_attribute(dataset, "position", std::vector<double>{0.0, 0.0});
 }
 
 void openpmd::initialize_2d_dataset(const std::string & filepath, const std::string & name, hsize_t n1, hsize_t n2, Space space, std::array<double, 2> grid_spacing) {
