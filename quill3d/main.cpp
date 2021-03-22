@@ -177,31 +177,27 @@ void write_1d_array(double * p_first_element, int vector_size, H5::DataSet * dat
 
 void append_to_1d_array(H5::DataSet * dataset, double data)
 { 
-    // cout<<"\033[33m"<<"Openning dataset: "<<dataset_name<<TERM_NO_COLOR<<endl;
-    // auto dataset = file->openDataSet(dataset_name);
     auto space = dataset->getSpace();
-    return;
     
     hsize_t size[1];
     space.getSimpleExtentDims(size, NULL);
 
-    // if (size[0] < 100000) {
-    //     extend_dataset(dataset, 0);
+    extend_dataset(dataset, 0);
 
-    //     std::vector<double> write = {data};
-    //     // write_1d_array(&data, 1, &dataset, size);
-    // }
+    std::vector<double> write = {data};
+    write_1d_array(&data, 1, dataset, size);
 }
 
 void append_to_timeseries(const std::string & dataset_name, double data)
 { 
-    H5::H5File file = H5::H5File(data_folder + std::string("/TimeSeries.h5"), H5F_ACC_RDWR);
+    // cout<<"\033[33m"<<"Openning dataset: "<<dataset_name<<TERM_NO_COLOR<<endl;
+    H5::H5File file = H5::H5File(data_folder + "/" + std::string("TimeSeries.h5"), H5F_ACC_RDWR);
     auto dataset = file.openDataSet(dataset_name);
     append_to_1d_array(&dataset, data);
 }
 
 void append_particle(H5::DataSet *datasets[][8], int *amounts, particle * p, int x0) {
-    const cstd::string space[8] = {"charge", "position/x", "position/y", "position/z", "momentum/x", "momentum/y", "momentum/z", "chi"};
+    const std::string space[8] = {"charge", "position/x", "position/y", "position/z", "momentum/x", "momentum/y", "momentum/z", "chi"};
     H5::DataSet **dataset;
     int amount;
     if (p->cmr==-1) {
@@ -323,15 +319,15 @@ void write_energy(ofstream& fout_energy)
                 fout_energy<<'\t'<<ienergy[n];
             fout_energy<<endl;
         
-        append_to_timeseries("Energy/electrons", energy_e);
-        append_to_timeseries("Energy/positrons", energy_p);
-        append_to_timeseries("Energy/photons", energy_ph);
-        append_to_timeseries("Energy/em", energy_f);
+        append_to_timeseries("energy/electrons", energy_e);
+        append_to_timeseries("energy/positrons", energy_p);
+        append_to_timeseries("energy/photons", energy_ph);
+        append_to_timeseries("energy/em", energy_f);
 
         for (int n = 0; n < n_ion_populations; n++) {
             char s_cmr[100];
             sprintf(s_cmr, "%g", icmr[n]);
-            append_to_timeseries("Energy/ions_" + std::string(s_cmr), ienergy[n]);
+            append_to_timeseries("energy/ions_" + std::string(s_cmr), ienergy[n]);
         }
     }
 }
@@ -507,14 +503,14 @@ void write_energy_deleted(ofstream& fout_energy_deleted)
             fout_energy_deleted << '\t' << ienergy_deleted[n];
         fout_energy_deleted << endl;
 
-        append_to_timeseries("Deleted/electrons", energy_e_deleted);
-        append_to_timeseries("Deleted/positrons", energy_p_deleted);
-        append_to_timeseries("Deleted/photons", energy_ph_deleted);
+        append_to_timeseries("deleted/electrons", energy_e_deleted);
+        append_to_timeseries("deleted/positrons", energy_p_deleted);
+        append_to_timeseries("deleted/photons", energy_ph_deleted);
 
         for (int n = 0; n < n_ion_populations; n++) {
             char s_cmr[100];
             sprintf(s_cmr, "%g", icmr[n]);
-            append_to_timeseries("Deleted/ions_" + std::string(s_cmr), ienergy_deleted[n]);
+            append_to_timeseries("deleted/ions_" + std::string(s_cmr), ienergy_deleted[n]);
         }
     }
 }
@@ -2349,45 +2345,27 @@ void load_balancing() {
 }
 
 void initialize_timeseries() {
-    const H5std_string FILE_NAME(data_folder + "/TimeSeries.h5");
-    openpmd::initialize_file(FILE_NAME);
-    H5::H5File file = H5::H5File(FILE_NAME, H5F_ACC_RDWR);
+    auto filename = data_folder + "/" + std::string("TimeSeries.h5");
+    
+    openpmd::initialize_file(filename);
 
-    hsize_t dims[1] = {0};
-    hsize_t maxdims[1] = {H5S_UNLIMITED};
-    hsize_t chunk_dims[1] = {1};
-    const H5std_string E_DATASET_NAME("Energy");
-
-        H5::DataSpace *dataspace = new H5::DataSpace(1, dims, maxdims);
-
-    H5::DSetCreatPropList prop;
-    prop.setChunk(1, chunk_dims);
-
-    file.createDataSet("t", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-
-    H5::Group energy_group = file.createGroup("Energy");
-    energy_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-    energy_group.createDataSet("positrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-    energy_group.createDataSet("photons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-    energy_group.createDataSet("em", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-
-    H5::Group deleted_group = file.createGroup("Deleted");
-    deleted_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-    deleted_group.createDataSet("positrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-    deleted_group.createDataSet("photons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-
-    for (int n = 0; n < n_ion_populations; n++) {
-        char s_cmr[100];
-        sprintf(s_cmr, "%g", icmr[n]);
-        std::string name = std::string("ions_") + std::string(s_cmr);
-        energy_group.createDataSet(name, H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-        deleted_group.createDataSet(name, H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    std::string names[3] = {"electrons", "positrons", "photons"};
+    std::string name;
+    for (int n = 0; n < 3 + n_ion_populations; n++) {
+        if (n < 3) {
+            name = names[n];
+            openpmd::initialize_1d_extendable_dataset(filename, "N/" + name, 1);
+        } else {
+            char s_cmr[100];
+            sprintf(s_cmr, "%g", icmr[n - 3]);
+            name = "ions_" + std::string(s_cmr);
+        }
+        openpmd::initialize_1d_extendable_dataset(filename, "energy/" + name, 1);
+        openpmd::initialize_1d_extendable_dataset(filename, "deleted/" + name, 1);
     }
-
-    H5::Group n_group = file.createGroup("N");
-    n_group.createDataSet("electrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-    n_group.createDataSet("positrons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
-    n_group.createDataSet("photons", H5::PredType::NATIVE_DOUBLE, *dataspace, prop);
+    openpmd::initialize_1d_extendable_dataset(filename, "energy/em", 1);
+    // It is now impossible to create dataset inside root group
+    // openpmd::initialize_1d_extendable_dataset(filename, "t", 1);
 }
 
 int main(int argc, char * argv[])
@@ -2587,7 +2565,7 @@ int main(int argc, char * argv[])
         }
 
         if (mpi_rank == 0) {
-            append_to_timeseries("t", l*dt);
+            // append_to_timeseries("t", l*dt);
             cout<<"\033[33m"<<"ct/lambda = "<<l*dt/2/PI<<"\tstep# "<<l<<TERM_NO_COLOR;
         }
 
