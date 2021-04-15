@@ -6,6 +6,18 @@
 extern bool qed_enabled;
 extern bool dump_photons;
 
+extern int l;
+extern double mwspeed;
+extern moving_window mwindow;
+
+extern double x0b;
+extern double xb;
+extern double xlength;
+
+extern vector<int> x0_sr;
+extern int n_sr;
+extern int mpi_rank;
+
 void spatial_region::fadvance()
 {
     solver->advance();
@@ -98,6 +110,12 @@ void spatial_region::padvance(double external_bz)
     particle* born;
     int_vector3d position;
     //
+
+    double speed = 0;
+    if (mwindow==moving_window::ON) {
+        speed = mwspeed;
+    }
+
     p_boundary();
     //
     for(int i=0;i<nx;i++)
@@ -115,6 +133,10 @@ void spatial_region::padvance(double external_bz)
     //
     for(int i=0;i<nx;i++)
     {
+        double x0 = i*dx + x0_sr[mpi_rank]*dx;
+        bool inside_e = (x0 > xlength - x0b - xb + dt * l * (1 - speed)) && (x0 < xlength - x0b + xb + dt * l * (1 - speed));
+        bool inside_p = (x0 > xlength - 2.1 * xb - dt * l * (1 + speed)) && (x0 < xlength - 0.1 * xb - dt * l * (1 + speed));
+        bool intersect = inside_e && inside_p;
         for(int j=0;j<ny;j++)
         {
             for(int k=0;k<nz;k++)
@@ -154,7 +176,7 @@ void spatial_region::padvance(double external_bz)
                             current->chi = chi(e, b, u_interim, current->g); // chi_{n+1/2}
                             a = 0.5 * (current->chi + chi_prev);
                             r = get_rand();
-                            calc_qed = !(get_rand()>=tilde_w(g_prev,r,a)*g_prev*dt);
+                            calc_qed = intersect && !(get_rand()>=tilde_w(g_prev,r,a)*g_prev*dt);
                         } else {
                             calc_qed = false;
                         }
@@ -253,7 +275,7 @@ void spatial_region::padvance(double external_bz)
                             current->chi = chi(e, b, u_interim, g_interim); // chi_{n+1/2}
                             a = 0.5 * (current->chi + chi_prev); // chi_n
                             r = get_rand();
-                            calc_qed = !(get_rand()>=w(g_prev,r,a)*g_prev*dt);
+                            calc_qed = intersect && !(get_rand()>=w(g_prev,r,a)*g_prev*dt);
                         } else {
                             advance_momentum(*current, e, b, dt); // p_n -> p_{n+1}
                             calc_qed = false;

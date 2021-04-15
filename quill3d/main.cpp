@@ -1266,8 +1266,10 @@ void init_beam()
         psr->add_beam(1,Nb*1.061e-11/(xb*rb*rb*lambda),((epsb>0)-(epsb<0))*sqrt(epsb*epsb/(0.511*0.511)-1),xb,rb,xlength-x0b-dx*x0_sr[i],y0b,phib);
     else if (beam_particles=="ph")
         psr->add_beam(0,Nb*1.061e-11/(xb*rb*rb*lambda),epsb/0.511,xb,rb,xlength-x0b-dx*x0_sr[i],y0b,phib);
-    else
+    else {
         psr->add_beam(-1,Nb*1.061e-11/(xb*rb*rb*lambda),((epsb>0)-(epsb<0))*sqrt(epsb*epsb/(0.511*0.511)-1),xb,rb,xlength-x0b-dx*x0_sr[i],y0b,phib);
+        psr->add_beam(1,Nb*1.061e-11/(xb*rb*rb*lambda),((epsb<0)-(epsb>0))*sqrt(epsb*epsb/(0.511*0.511)-1),xb,rb,xlength-1.1*xb-dx*x0_sr[i],y0b,phib);
+    }
 }
 
 void init_films()
