@@ -1,6 +1,6 @@
 # Uncomment and set to proper values if the compiler/linker cannot find HDF5
-# HDF5_INCLUDE_PATH = /usr/include/hdf5/serial/
-# HDF5_LIBRARY_PATH = /usr/lib/x86_64-linux-gnu/hdf5/serial/
+HDF5_INCLUDE_PATH = /usr/include/hdf5/serial/
+HDF5_LIBRARY_PATH = /usr/lib/x86_64-linux-gnu/hdf5/serial/
 
 DEPDIR := .d
 $(shell mkdir -p $(DEPDIR) >/dev/null)
