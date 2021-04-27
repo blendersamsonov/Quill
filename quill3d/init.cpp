@@ -486,9 +486,29 @@ void spatial_region::add_beam(double cmr, double n0, double u0, double xb, doubl
     b.i = xnpic;
     b.j = ynpic;
     b.k = znpic;
-    double x, y, z, r, n, f_ampl, signum, type, phi;
+    double x, y, z, r, n, signum, type, phi;
     signum = (u0>0) - (u0<0);
     type = (cmr>0)-(cmr<0);
+
+    auto beam_ampl = [=] (double x, double y, double z, bool multy, bool multz)
+    {
+        double res = 0.0;
+        x -= x0b;
+        y -= dy*ny/2;
+        z -= dz*nz/2;
+        double r = sqrt(y*y + z*z);
+
+        if (x>-xb && x<xb && r<rb)
+            res = 0.5 / 3.0;
+        if (x>-xb && x<xb && r>=rb)
+            res = 0.5 / 3.0 * rb * rb / (r * r);
+        if (multy)
+            res *= y;
+        if (multz)
+            res *= z;
+        return res;
+    };
+
     for(int i=0; i<nx; i++)
     {
         for(int j=0; j<ny; j++)
@@ -499,33 +519,23 @@ void spatial_region::add_beam(double cmr, double n0, double u0, double xb, doubl
                 a.j = j;
                 a.k = k;
                 phi = atan2((j-ny/2)*dy-y0b, i*dx-x0b);
-                // x,y,z are in the rotated (by phib) coordinate system
+                
                 x = sqrt((i*dx-x0b)*(i*dx-x0b) + ((j-ny/2)*dy-y0b)*((j-ny/2)*dy-y0b)) * cos(phi - phib);
                 y = sqrt((i*dx-x0b)*(i*dx-x0b) + ((j-ny/2)*dy-y0b)*((j-ny/2)*dy-y0b)) * sin(phi - phib);
                 z = (k-nz/2)*dz;
                 r = sqrt(y*y + z*z);
                 if (x>-xb && x<xb && r<rb)
                 {
-                    n = n0*(1-x*x/(xb*xb))*(1-r*r/(rb*rb));
-                    fill_cell_by_particles(cmr,a,b,n,u0*cos(phib),u0*sin(phib));
-                    f_ampl = 0.5*n0*(1-x*x/(xb*xb))*(1-r*r/(2*rb*rb));
-                    ce[i][j][k].ex -= type*f_ampl*y * sin(phib);
-                    ce[i][j][k].ey += type*f_ampl*y * cos(phib);
-                    ce[i][j][k].ez += type*f_ampl*z;
-                    cb[i][j][k].bx += type*signum*f_ampl*z * sin(phib);
-                    cb[i][j][k].by -= type*signum*f_ampl*z * cos(phib);
-                    cb[i][j][k].bz += type*signum*f_ampl*y;
+                    fill_cell_by_particles(cmr,a,b,n0/3.,u0*cos(phib),u0*sin(phib),0,0);
                 }
-                if (x>-xb && x<xb && r>=rb)
-                {
-                    f_ampl = 0.25*n0*(1-x*x/(xb*xb))*rb*rb/(r*r);
-                    ce[i][j][k].ex -= type*f_ampl*y * sin(phib);
-                    ce[i][j][k].ey += type*f_ampl*y * cos(phib);
-                    ce[i][j][k].ez += type*f_ampl*z;
-                    cb[i][j][k].bx += type*signum*f_ampl*z * sin(phib);
-                    cb[i][j][k].by -= type*signum*f_ampl*z * cos(phib);
-                    cb[i][j][k].bz += type*signum*f_ampl*y;
-                }
+
+                ce[i][j][k].ex -= n0 * type * beam_ampl((i+0.5)*dx, j*dy, k*dz, true, false) * sin(phib);
+                ce[i][j][k].ey += n0 * type * beam_ampl(i*dx, (j+0.5)*dy, k*dz, true, false) * cos(phib);
+                ce[i][j][k].ez += n0 * type * beam_ampl(i*dx, j*dy, (k+0.5)*dz, false, true);
+                
+                cb[i][j][k].bx += n0 * type * signum * beam_ampl(i*dx, (j+0.5)*dy, (k+0.5)*dz, false, true) * sin(phib);
+                cb[i][j][k].by -= n0 * type * signum * beam_ampl((i+0.5)*dx, j*dy, (k+0.5)*dz, false, true) * cos(phib);
+                cb[i][j][k].bz += n0 * type * signum * beam_ampl((i+0.5)*dx, (j+0.5)*dy, k*dz, true, false);
             }
         }
     }
