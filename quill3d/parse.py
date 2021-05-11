@@ -3,7 +3,7 @@ import os
 import sys
 import re
 
-prefix = '../quill3d-conf/quill.conf'
+prefix = './quill3d-conf/quill.conf'
 
 # regex for numbers
 number_regex = r'([-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?)'

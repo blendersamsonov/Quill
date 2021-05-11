@@ -529,13 +529,13 @@ void spatial_region::add_beam(double cmr, double n0, double u0, double xb, doubl
                     fill_cell_by_particles(cmr,a,b,n0/3.,u0*cos(phib),u0*sin(phib),0,0);
                 }
 
-                ce[i][j][k].ex -= n0 * type * beam_ampl((i+0.5)*dx, j*dy, k*dz, true, false) * sin(phib);
-                ce[i][j][k].ey += n0 * type * beam_ampl(i*dx, (j+0.5)*dy, k*dz, true, false) * cos(phib);
-                ce[i][j][k].ez += n0 * type * beam_ampl(i*dx, j*dy, (k+0.5)*dz, false, true);
+                ce[i][j][k].ex -= n0/3 * type * beam_ampl((i+0.5)*dx, j*dy, k*dz, true, false) * sin(phib);
+                ce[i][j][k].ey += n0/3 * type * beam_ampl(i*dx, (j+0.5)*dy, k*dz, true, false) * cos(phib);
+                ce[i][j][k].ez += n0/3 * type * beam_ampl(i*dx, j*dy, (k+0.5)*dz, false, true);
                 
-                cb[i][j][k].bx += n0 * type * signum * beam_ampl(i*dx, (j+0.5)*dy, (k+0.5)*dz, false, true) * sin(phib);
-                cb[i][j][k].by -= n0 * type * signum * beam_ampl((i+0.5)*dx, j*dy, (k+0.5)*dz, false, true) * cos(phib);
-                cb[i][j][k].bz += n0 * type * signum * beam_ampl((i+0.5)*dx, (j+0.5)*dy, k*dz, true, false);
+                cb[i][j][k].bx += n0/3 * type * signum * beam_ampl(i*dx, (j+0.5)*dy, (k+0.5)*dz, false, true) * sin(phib);
+                cb[i][j][k].by -= n0/3 * type * signum * beam_ampl((i+0.5)*dx, j*dy, (k+0.5)*dz, false, true) * cos(phib);
+                cb[i][j][k].bz += n0/3 * type * signum * beam_ampl((i+0.5)*dx, (j+0.5)*dy, k*dz, true, false);
             }
         }
     }
