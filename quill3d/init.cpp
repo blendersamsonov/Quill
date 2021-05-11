@@ -518,11 +518,9 @@ void spatial_region::add_beam(double cmr, double n0, double u0, double xb, doubl
                 a.i = i;
                 a.j = j;
                 a.k = k;
+
                 phi = atan2((j-ny/2)*dy-y0b, i*dx-x0b);
-                
                 x = sqrt((i*dx-x0b)*(i*dx-x0b) + ((j-ny/2)*dy-y0b)*((j-ny/2)*dy-y0b)) * cos(phi - phib);
-                y = sqrt((i*dx-x0b)*(i*dx-x0b) + ((j-ny/2)*dy-y0b)*((j-ny/2)*dy-y0b)) * sin(phi - phib);
-                z = (k-nz/2)*dz;
                 r = sqrt(y*y + z*z);
                 if (x>-xb && x<xb && r<rb)
                 {
